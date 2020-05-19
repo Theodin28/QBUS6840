@@ -143,7 +143,7 @@ train_inout_seq[:5]
 
 
 class LSTM(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1):
+    def __init__(self, input_size=1, hidden_layer_size=50, output_size=1):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
 
@@ -165,7 +165,7 @@ class LSTM(nn.Module):
 # In[26]:
 
 
-epochs = 25
+epochs = 150
 l_rate = 0.1     # loss bounces around too much with l_rate = 0.25
 
 model = LSTM()
