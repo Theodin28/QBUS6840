@@ -5,9 +5,6 @@
 # ### RNN LSTM Model
 # Sam Curtis
 
-# In[39]:
-
-
 import pandas as pd
 import numpy as np
 from tqdm import tqdm_notebook
@@ -86,7 +83,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 scaler = MinMaxScaler(feature_range=(-1,1))
 train_data_normalised = scaler.fit_transform(train_data.reshape(-1,1))
-
+all_data_normalised = scaler.fit_transform(unemployment_data.reshape(-1,1))
 
 # ### Convert data into tensors
 
@@ -94,7 +91,7 @@ train_data_normalised = scaler.fit_transform(train_data.reshape(-1,1))
 
 
 train_data_normalised = torch.FloatTensor(train_data_normalised).view(-1)
-
+all_data_normalised = torch.FloatTensor(all_data_normalised).view(-1)
 
 # ### Convert training data into sequences with corresponding labels
 # We have monthly data so will convert our data into sequences of length 12
@@ -128,6 +125,7 @@ def create_inout_sequences(input_data, tw):
 
 
 train_inout_seq = create_inout_sequences(train_data_normalised, train_window)
+all_inout_seq = create_inout_sequences(all_data_normalised, train_window)
 
 
 # In[23]:
@@ -143,7 +141,7 @@ train_inout_seq[:5]
 
 
 class LSTM(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_size=50, output_size=1):
+    def __init__(self, input_size=1, hidden_layer_size=20, output_size=1):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
 
@@ -165,8 +163,8 @@ class LSTM(nn.Module):
 # In[26]:
 
 
-epochs = 150
-l_rate = 0.1     # loss bounces around too much with l_rate = 0.25
+epochs = 1000
+l_rate = 0.001    
 
 model = LSTM()
 loss_function = nn.MSELoss()
@@ -177,8 +175,7 @@ print(model)
 # ### Train the Model
 
 # In[32]:
-
-
+loss = []
 for i in range(epochs):
     for seq, labels in train_inout_seq:
         optimiser.zero_grad()
@@ -190,6 +187,7 @@ for i in range(epochs):
         single_loss = loss_function(y_pred, labels)
         single_loss.backward()
         optimiser.step()
+        loss.append(single_loss.item())
 
     print(f'epoch: {i:3} loss: {single_loss.item():10.8f}')
 
@@ -210,6 +208,7 @@ print(f'epoch: {i:3} loss: {single_loss.item():10.10f}')
 prediction_range = 12
 
 test_inputs = train_data_normalised[-train_window:].tolist()
+all_inputs = all_data_normalised.tolist()
 print(test_inputs)
 
 
@@ -239,8 +238,8 @@ test_inputs[prediction_range:]
 # In[40]:
 
 
-model_forecasts = scaler.inverse_transform(np.array(test_inputs[prediction_range:]).reshape(-1,1))
-print(model_forecasts)
+test_forecasts = scaler.inverse_transform(np.array(test_inputs[prediction_range:]).reshape(-1,1))
+print(test_forecasts)
 
 
 # ## Visualise Forecasts
@@ -253,7 +252,7 @@ forecast_dates = data.index[-12:]
 rcParams['figure.figsize'] = 15, 6
 plt.figure()
 plt.plot(ts)
-plt.plot(forecast_dates, model_forecasts)
+plt.plot(forecast_dates, test_forecasts)
 plt.title('Unemployment Rates from Jan 1986 to Dec 2018')
 plt.xlabel('Time')
 plt.ylabel('Unemployment Rates');
@@ -267,7 +266,7 @@ plt.ylabel('Unemployment Rates');
 rcParams['figure.figsize'] = 15, 6
 plt.figure()
 plt.plot(ts[-train_window:])
-plt.plot(forecast_dates, model_forecasts)
+plt.plot(forecast_dates, test_forecasts)
 plt.title('Unemployment Rates from Jan 1986 to Dec 2018')
 plt.xlabel('Time')
 plt.ylabel('Unemployment Rates');
@@ -277,4 +276,24 @@ plt.ylabel('Unemployment Rates');
 # In[48]:
 
 # Calc MSE for the test set
-print('Forecast MSE = %.3f' %(loss_function(torch.Tensor(data['Unemployment_Rates'][-12:]), torch.Tensor(model_forecasts)[:,-1])))  
+print('Forecast MSE = %.3f' %(loss_function(torch.Tensor(data['Unemployment_Rates'][-12:]), torch.Tensor(test_forecasts)[:,-1])))  
+
+
+
+
+
+
+# In[49]:
+
+model.eval()    
+# Create 2019 forecasts:
+for i in range(prediction_range):
+    seq = torch.FloatTensor(all_inputs)
+    with torch.no_grad():
+        model.hidden = (torch.zeros(1,1, model.hidden_layer_size),
+                        torch.zeros(1,1, model.hidden_layer_size))
+        all_inputs.append(model(seq).item())
+
+next_yr_forecasts = all_inputs[-12:]    
+next_yr_forecasts = scaler.inverse_transform(np.array(next_yr_forecasts).reshape(-1,1))
+print(next_yr_forecasts)
